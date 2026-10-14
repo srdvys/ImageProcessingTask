@@ -1,7 +1,10 @@
 using Microsoft.EntityFrameworkCore;
+using Backend.Services;
 using Backend.Data;
 
 var builder = WebApplication.CreateBuilder(args);
+
+Console.OutputEncoding = System.Text.Encoding.UTF8;
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
@@ -9,6 +12,9 @@ builder.Services.AddOpenApi();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddScoped<ImageProcessingService>();
+builder.Services.AddControllers();
 
 var app = builder.Build();
 
@@ -38,6 +44,8 @@ app.MapGet("/weatherforecast", () =>
     return forecast;
 })
 .WithName("GetWeatherForecast");
+
+app.MapControllers();
 
 app.Run();
 
