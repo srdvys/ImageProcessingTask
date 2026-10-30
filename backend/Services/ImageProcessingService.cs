@@ -7,7 +7,7 @@ namespace Backend.Services
 {
     public class ImageProcessingService
     {
-        public void ApplyHeavyFilter(string inputPath, string outputPath, Action<int> onProgress)
+        public void ApplyHeavyFilter(string inputPath, string outputPath, Action<int> reportProgress, string filterType = "grayscale")
         {
             using var image = Image.Load<Rgba32>(inputPath);
             int width = image.Width;
@@ -33,20 +33,52 @@ namespace Backend.Services
                     byte b = pixelBytes[pixelOffset + 2];
                     byte a = pixelBytes[pixelOffset + 3];
 
-                    byte gray = (byte)((r * 0.299) + (g * 0.587) + (b * 0.114));
+                    byte newR = r, newG = g, newB = b;
 
-                    double heavyMath = Math.Sqrt(Math.Pow(gray, 2) + Math.Pow(a, 2));
+                    if (filterType == "negative")
+                    {
+                        newR = (byte)(255 - r);
+                        newG = (byte)(255 - g);
+                        newB = (byte)(255 - b);
+                    }
+                    else if (filterType == "sepia")
+                    {
+                        newR = (byte)Math.Min(255, (r * 0.393) + (g * 0.769) + (b * 0.189));
+                        newG = (byte)Math.Min(255, (r * 0.349) + (g * 0.686) + (b * 0.168));
+                        newB = (byte)Math.Min(255, (r * 0.272) + (g * 0.534) + (b * 0.131));
+                    }
+                    else if (filterType == "red")
+                    {
+                        newR = (byte)Math.Min(255, r * 1.5);
+                        newG = (byte)(g * 0.5);
+                        newB = (byte)(b * 0.5);
+                    }
+                    else if (filterType == "blue")
+                    {
+                        newR = (byte)(r * 0.5);
+                        newG = (byte)(g * 0.5);
+                        newB = (byte)Math.Min(255, b * 1.5);
+                    }
+                    else 
+                    {
+                        byte gray = (byte)((r * 0.299) + (g * 0.587) + (b * 0.114));
+                        newR = gray;
+                        newG = gray;
+                        newB = gray;
+                    }
 
-                    pixelBytes[pixelOffset] = gray; //R
-                    pixelBytes[pixelOffset + 1] = gray; //G
-                    pixelBytes[pixelOffset + 2] = (byte)(gray > 128 ? gray - 10 : gray + 10); //B
+                    double heavyMath = Math.Sqrt(Math.Pow(newR, 2) + Math.Pow(a, 2));
+
+                    pixelBytes[pixelOffset] = newR;
+                    pixelBytes[pixelOffset + 1] = newG;
+                    pixelBytes[pixelOffset + 2] = newB;
                 }
 
                 lock (lockObj)
                 {
                     processedPixels += width;
                     int progress = (int)((double)processedPixels / totalPixels * 100);
-                    onProgress?.Invoke(progress);
+                    reportProgress?.Invoke(progress);
                 }
             });
 

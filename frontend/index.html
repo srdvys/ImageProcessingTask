@@ -1,13 +1,103 @@
 <!DOCTYPE html>
-<html>
+<html lang="uk">
 <head>
-    <meta charset="utf-8">
+    <meta charset="UTF-8">
+    <title>Обробка фото</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 600px;
+        }
+
+        #progress-wrapper {
+            width: 100%;
+            background-color: #f3f3f3;
+            border-radius: 5px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        #progress-bar {
+            width: 0%;
+            height: 30px;
+            background-color: #4caf50;
+            border-radius: 5px;
+            text-align: center;
+            line-height: 30px;
+            color: white;
+            transition: width 0.3s;
+        }
+
+        #result-image {
+            max-width: 100%;
+            margin-top: 20px;
+            display: none;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+    </style>
 </head>
 <body>
-    <h2>тест бекенду</h2>
-    <form action="http://localhost:5000/api/image/upload" method="post" enctype="multipart/form-data">
-        <input type="file" name="file" required>
+    <h2>Завантажити фотографію</h2>
+    <form id="uploadForm">
+        <input type="file" id="imageInput" name="file" required><br><br>
+
+        <label>Оберіть фільтр:</label>
+        <select name="filterType">
+            <option value="grayscale">Чорно-білий</option>
+            <option value="negative">Негатив</option>
+            <option value="sepia">Сепія</option>
+            <option value="red">Червоний відтінок</option>
+            <option value="blue">Синій відтінок</option>
+        </select><br><br>
+
         <button type="submit">Відправити фото</button>
     </form>
+
+    <div id="progress-wrapper">
+        <div id="progress-bar">0%</div>
+    </div>
+
+    <img id="result-image" alt="Оброблено" />
+
+    <script>
+                document.getElementById("uploadForm").onsubmit = async (e) => {
+                    e.preventDefault();
+                    const formData = new FormData(e.target);
+
+                    document.getElementById("progress-wrapper").style.display = "block";
+                    document.getElementById("progress-bar").style.width = "0%";
+                    document.getElementById("progress-bar").innerText = "0%";
+                    document.getElementById("result-image").style.display = "none";
+
+                    const response = await fetch("http://localhost:5000/api/image", {
+                        method: "POST",
+                        body: formData
+                    });
+
+                    const data = await response.json();
+
+                    if (data.taskId) {
+                        checkProgress(data.taskId);
+                    }
+                };
+
+                async function checkProgress(taskId) {
+                    const interval = setInterval(async () => {
+                        const res = await fetch(`http://localhost:5000/api/image/status/${taskId}`);
+                        const statusData = await res.json();
+
+                        document.getElementById("progress-bar").style.width = statusData.progress + "%";
+                        document.getElementById("progress-bar").innerText = statusData.progress + "%";
+
+                        if (statusData.progress >= 100) {
+                            clearInterval(interval);
+                            document.getElementById("result-image").src = "http://localhost:5000" + statusData.resultUrl;
+                            document.getElementById("result-image").style.display = "block";
+                        }
+                    }, 500);
+                }
+    </script>
 </body>
 </html>

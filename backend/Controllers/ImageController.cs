@@ -1,10 +1,12 @@
 ﻿using Backend.Data;
 using Backend.Models;
 using Backend.Services;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace Backend.Controllers
@@ -15,15 +17,17 @@ namespace Backend.Controllers
     {
         private readonly AppDbContext _context;
         private readonly ImageProcessingService _processingService;
+        private readonly IWebHostEnvironment _env;
 
-        public ImageController(AppDbContext context, ImageProcessingService processingService)
+        public ImageController(AppDbContext context, ImageProcessingService processingService, IWebHostEnvironment env)
         {
             _context = context;
             _processingService = processingService;
+            _env = env;
         }
 
-        [HttpPost("upload")]
-        public async Task<IActionResult> UploadImage(IFormFile file)
+        [HttpPost]
+        public async Task<IActionResult> UploadImage(IFormFile file, [FromForm] string filterType = "grayscale")
         {
             if (file == null || file.Length == 0)
                 return BadRequest("Будь ласка, виберіть файл.");
@@ -33,13 +37,13 @@ namespace Backend.Controllers
             {
                 user = new User { Username = "TestUser", PasswordHash = "TestHash123" };
                 _context.Users.Add(user);
-                await _context.SaveChangesAsync(); 
+                await _context.SaveChangesAsync();
             }
 
             var imageTask = new ImageTask
             {
                 Id = Guid.NewGuid(),
-                UserId = user.Id, 
+                UserId = user.Id,
                 OriginalFileName = file.FileName,
                 Status = ImageTaskStatus.Processing,
                 Progress = 0,
@@ -49,7 +53,7 @@ namespace Backend.Controllers
             _context.ImageTasks.Add(imageTask);
             await _context.SaveChangesAsync();
 
-            var uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images");
+            var uploadsFolder = Path.Combine(_env.ContentRootPath, "wwwroot", "images");
             if (!Directory.Exists(uploadsFolder))
                 Directory.CreateDirectory(uploadsFolder);
 
@@ -64,7 +68,7 @@ namespace Backend.Controllers
             _processingService.ApplyHeavyFilter(inputPath, outputPath, progress =>
             {
                 Console.WriteLine($"Прогрес обробки {imageTask.Id}: {progress}%");
-            });
+            }, filterType);
 
             imageTask.Status = ImageTaskStatus.Completed;
             imageTask.Progress = 100;
@@ -78,6 +82,20 @@ namespace Backend.Controllers
                 Message = "Зображення успішно оброблено!",
                 TaskId = imageTask.Id,
                 ResultUrl = imageTask.ResultImageUrl
+            });
+        }
+
+        [HttpGet("status/{id}")]
+        public IActionResult GetTaskStatus(Guid id)
+        {
+            var task = _context.ImageTasks.Find(id);
+            if (task == null) return NotFound();
+
+            return Ok(new
+            {
+                progress = task.Progress,
+                status = task.Status.ToString(),
+                resultUrl = task.ResultImageUrl
             });
         }
     }
