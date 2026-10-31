@@ -2,64 +2,147 @@
 <html lang="uk">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Обробка фото</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
             padding: 20px;
-            max-width: 600px;
+            box-sizing: border-box;
         }
+
+        .main-container {
+            background-color: #ffffff;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            width: 100%;
+            max-width: 450px;
+            text-align: center;
+        }
+
+        h2 {
+            margin-top: 0;
+            color: #1a1a1a;
+            font-size: 24px;
+            margin-bottom: 25px;
+        }
+
+        input[type="file"], select {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 20px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-size: 15px;
+            background-color: #f9fafb;
+            color: #374151;
+            cursor: pointer;
+        }
+
+            input[type="file"]::file-selector-button {
+                border: none;
+                background: #e5e7eb;
+                padding: 8px 12px;
+                border-radius: 6px;
+                color: #374151;
+                cursor: pointer;
+                margin-right: 10px;
+                transition: background 0.2s;
+            }
+
+                input[type="file"]::file-selector-button:hover {
+                    background: #d1d5db;
+                }
+
+            select:focus, input[type="file"]:focus {
+                outline: none;
+                border-color: #3b82f6;
+                box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            }
+
+        button {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 14px 20px;
+            width: 100%;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.1s ease;
+        }
+
+            button:hover {
+                background-color: #2563eb;
+            }
+
+            button:active {
+                transform: scale(0.98);
+            }
 
         #progress-wrapper {
             width: 100%;
-            background-color: #f3f3f3;
-            border-radius: 5px;
-            margin-top: 20px;
+            background-color: #e5e7eb;
+            border-radius: 8px;
+            margin-top: 25px;
             display: none;
+            overflow: hidden;
+            height: 24px;
         }
 
         #progress-bar {
             width: 0%;
-            height: 30px;
-            background-color: #4caf50;
-            border-radius: 5px;
+            height: 100%;
+            background-color: #10b981;
             text-align: center;
-            line-height: 30px;
+            line-height: 24px;
             color: white;
-            transition: width 0.3s;
+            font-weight: bold;
+            font-size: 13px;
+            transition: width 0.4s ease;
         }
 
         #result-image {
             max-width: 100%;
-            margin-top: 20px;
+            margin-top: 25px;
             display: none;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         }
     </style>
 </head>
 <body>
-    <h2>Завантажити фотографію</h2>
-    <form id="uploadForm">
-        <input type="file" id="imageInput" name="file" required><br><br>
+    <div class="main-container">
+        <h2>Завантажити фотографію</h2>
+        <form id="uploadForm">
+            <input type="file" id="imageInput" name="file" required accept="image/*">
 
-        <label>Оберіть фільтр:</label>
-        <select name="filterType">
-            <option value="grayscale">Чорно-білий</option>
-            <option value="negative">Негатив</option>
-            <option value="sepia">Сепія</option>
-            <option value="red">Червоний відтінок</option>
-            <option value="blue">Синій відтінок</option>
-        </select><br><br>
+            <select name="filterType">
+                <option value="grayscale">Чорно-білий</option>
+                <option value="negative">Негатив</option>
+                <option value="sepia">Сепія</option>
+                <option value="red">Червоний відтінок</option>
+                <option value="blue">Синій відтінок</option>
+            </select>
 
-        <button type="submit">Відправити фото</button>
-    </form>
+            <button type="submit">Відправити фото</button>
+        </form>
 
-    <div id="progress-wrapper">
-        <div id="progress-bar">0%</div>
+        <div id="progress-wrapper">
+            <div id="progress-bar">0%</div>
+        </div>
+
+        <img id="result-image" alt="Оброблено" />
     </div>
-
-    <img id="result-image" alt="Оброблено" />
 
     <script>
                 function generateUUID() {
@@ -94,18 +177,13 @@
                 };
 
                 async function checkProgress(taskId) {
-                    console.log("Починаємо опитування для ID:", taskId);
                     const interval = setInterval(async () => {
                         try {
                             const res = await fetch(`http://localhost:5000/api/image/status/${taskId}`);
 
-                            if (!res.ok) {
-                                console.log(`Сервер ще не обробив запит (статус ${res.status})`);
-                                return;
-                            }
+                            if (!res.ok) return;
 
                             const statusData = await res.json();
-                            console.log(`Отримано прогрес з бекенду: ${statusData.progress}%`);
 
                             document.getElementById("progress-bar").style.width = statusData.progress + "%";
                             document.getElementById("progress-bar").innerText = statusData.progress + "%";
