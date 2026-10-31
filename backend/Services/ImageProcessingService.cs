@@ -79,6 +79,7 @@ namespace Backend.Services
                     processedPixels += width;
                     int progress = (int)((double)processedPixels / totalPixels * 100);
                     reportProgress?.Invoke(progress);
+
                 }
             });
 

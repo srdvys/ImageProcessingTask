@@ -62,39 +62,61 @@
     <img id="result-image" alt="Оброблено" />
 
     <script>
+                function generateUUID() {
+                    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                        var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+                        return v.toString(16);
+                    });
+                }
+
                 document.getElementById("uploadForm").onsubmit = async (e) => {
                     e.preventDefault();
                     const formData = new FormData(e.target);
+
+                    const taskId = generateUUID();
+                    formData.append("taskId", taskId);
 
                     document.getElementById("progress-wrapper").style.display = "block";
                     document.getElementById("progress-bar").style.width = "0%";
                     document.getElementById("progress-bar").innerText = "0%";
                     document.getElementById("result-image").style.display = "none";
 
-                    const response = await fetch("http://localhost:5000/api/image", {
-                        method: "POST",
-                        body: formData
-                    });
+                    checkProgress(taskId);
 
-                    const data = await response.json();
-
-                    if (data.taskId) {
-                        checkProgress(data.taskId);
+                    try {
+                        await fetch("http://localhost:5000/api/image", {
+                            method: "POST",
+                            body: formData
+                        });
+                    } catch (err) {
+                        console.error("Помилка:", err);
                     }
                 };
 
                 async function checkProgress(taskId) {
+                    console.log("Починаємо опитування для ID:", taskId);
                     const interval = setInterval(async () => {
-                        const res = await fetch(`http://localhost:5000/api/image/status/${taskId}`);
-                        const statusData = await res.json();
+                        try {
+                            const res = await fetch(`http://localhost:5000/api/image/status/${taskId}`);
 
-                        document.getElementById("progress-bar").style.width = statusData.progress + "%";
-                        document.getElementById("progress-bar").innerText = statusData.progress + "%";
+                            if (!res.ok) {
+                                console.log(`Сервер ще не обробив запит (статус ${res.status})`);
+                                return;
+                            }
 
-                        if (statusData.progress >= 100) {
-                            clearInterval(interval);
-                            document.getElementById("result-image").src = "http://localhost:5000" + statusData.resultUrl;
-                            document.getElementById("result-image").style.display = "block";
+                            const statusData = await res.json();
+                            console.log(`Отримано прогрес з бекенду: ${statusData.progress}%`);
+
+                            document.getElementById("progress-bar").style.width = statusData.progress + "%";
+                            document.getElementById("progress-bar").innerText = statusData.progress + "%";
+
+                            if (statusData.progress >= 100 && statusData.resultUrl) {
+                                clearInterval(interval);
+                                document.getElementById("result-image").src = "http://localhost:5000" + statusData.resultUrl;
+                                document.getElementById("result-image").style.display = "block";
+                            }
+                        } catch (err) {
+                            console.error("Помилка з'єднання:", err);
                         }
                     }, 500);
                 }

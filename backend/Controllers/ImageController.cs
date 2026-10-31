@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -19,6 +20,8 @@ namespace Backend.Controllers
         private readonly ImageProcessingService _processingService;
         private readonly IWebHostEnvironment _env;
 
+        private static readonly ConcurrentDictionary<string, int> _liveProgress = new ConcurrentDictionary<string, int>();
+
         public ImageController(AppDbContext context, ImageProcessingService processingService, IWebHostEnvironment env)
         {
             _context = context;
@@ -27,10 +30,17 @@ namespace Backend.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> UploadImage(IFormFile file, [FromForm] string filterType = "grayscale")
+        public async Task<IActionResult> UploadImage()
         {
+            var file = Request.Form.Files.FirstOrDefault();
+            var filterType = Request.Form["filterType"].ToString();
+            var taskId = Request.Form["taskId"].ToString();
+
             if (file == null || file.Length == 0)
                 return BadRequest("Будь ласка, виберіть файл.");
+
+            if (string.IsNullOrEmpty(taskId))
+                taskId = Guid.NewGuid().ToString();
 
             var user = _context.Users.FirstOrDefault();
             if (user == null)
@@ -42,7 +52,7 @@ namespace Backend.Controllers
 
             var imageTask = new ImageTask
             {
-                Id = Guid.NewGuid(),
+                Id = Guid.Parse(taskId),
                 UserId = user.Id,
                 OriginalFileName = file.FileName,
                 Status = ImageTaskStatus.Processing,
@@ -65,17 +75,21 @@ namespace Backend.Controllers
                 await file.CopyToAsync(stream);
             }
 
+            _liveProgress[taskId] = 0;
+
             _processingService.ApplyHeavyFilter(inputPath, outputPath, progress =>
             {
-                Console.WriteLine($"Прогрес обробки {imageTask.Id}: {progress}%");
+                Console.WriteLine($"Прогрес обробки {taskId}: {progress}%");
+                _liveProgress[taskId] = progress;
             }, filterType);
 
             imageTask.Status = ImageTaskStatus.Completed;
             imageTask.Progress = 100;
             imageTask.CompletedAt = DateTime.UtcNow;
             imageTask.ResultImageUrl = $"/images/{imageTask.Id}_processed.jpg";
-
             await _context.SaveChangesAsync();
+
+            _liveProgress.TryRemove(taskId, out _);
 
             return Ok(new
             {
@@ -86,17 +100,28 @@ namespace Backend.Controllers
         }
 
         [HttpGet("status/{id}")]
-        public IActionResult GetTaskStatus(Guid id)
+        public IActionResult GetTaskStatus(string id)
         {
-            var task = _context.ImageTasks.Find(id);
-            if (task == null) return NotFound();
-
-            return Ok(new
+            if (_liveProgress.TryGetValue(id, out int liveProgress))
             {
-                progress = task.Progress,
-                status = task.Status.ToString(),
-                resultUrl = task.ResultImageUrl
-            });
+                return Ok(new { progress = liveProgress, status = "Processing" });
+            }
+
+            if (Guid.TryParse(id, out Guid guidId))
+            {
+                var task = _context.ImageTasks.Find(guidId);
+                if (task != null)
+                {
+                    return Ok(new
+                    {
+                        progress = task.Progress,
+                        status = task.Status.ToString(),
+                        resultUrl = task.ResultImageUrl
+                    });
+                }
+            }
+
+            return NotFound();
         }
     }
 }
