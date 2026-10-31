@@ -8,6 +8,7 @@ using System;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Backend.Controllers
@@ -21,6 +22,7 @@ namespace Backend.Controllers
         private readonly IWebHostEnvironment _env;
 
         private static readonly ConcurrentDictionary<string, int> _liveProgress = new ConcurrentDictionary<string, int>();
+        private static readonly ConcurrentDictionary<string, CancellationTokenSource> _cancelTokens = new ConcurrentDictionary<string, CancellationTokenSource>();
 
         public ImageController(AppDbContext context, ImageProcessingService processingService, IWebHostEnvironment env)
         {
@@ -36,14 +38,9 @@ namespace Backend.Controllers
             var filterType = Request.Form["filterType"].ToString();
             var taskId = Request.Form["taskId"].ToString();
 
-            if (file == null || file.Length == 0)
-                return BadRequest("Будь ласка, виберіть файл.");
-
-            if (file.Length > 5 * 1024 * 1024)
-                return BadRequest("Перевищено ліміт трудомісткості: розмір файлу більший за 5 МБ.");
-
-            if (string.IsNullOrEmpty(taskId))
-                taskId = Guid.NewGuid().ToString();
+            if (file == null || file.Length == 0) return BadRequest("Будь ласка, виберіть файл.");
+            if (file.Length > 5 * 1024 * 1024) return BadRequest("Перевищено ліміт трудомісткості: розмір файлу більший за 5 МБ.");
+            if (string.IsNullOrEmpty(taskId)) taskId = Guid.NewGuid().ToString();
 
             var user = _context.Users.FirstOrDefault();
             if (user == null)
@@ -67,8 +64,7 @@ namespace Backend.Controllers
             await _context.SaveChangesAsync();
 
             var uploadsFolder = Path.Combine(_env.ContentRootPath, "wwwroot", "images");
-            if (!Directory.Exists(uploadsFolder))
-                Directory.CreateDirectory(uploadsFolder);
+            if (!Directory.Exists(uploadsFolder)) Directory.CreateDirectory(uploadsFolder);
 
             var inputPath = Path.Combine(uploadsFolder, $"{imageTask.Id}_original.jpg");
             var outputPath = Path.Combine(uploadsFolder, $"{imageTask.Id}_processed.jpg");
@@ -80,50 +76,64 @@ namespace Backend.Controllers
 
             _liveProgress[taskId] = 0;
 
-            _processingService.ApplyHeavyFilter(inputPath, outputPath, progress =>
+            var cts = new CancellationTokenSource();
+            _cancelTokens[taskId] = cts;
+
+            try
             {
-                Console.WriteLine($"Прогрес обробки {taskId}: {progress}%");
-                _liveProgress[taskId] = progress;
-            }, filterType);
+                _processingService.ApplyHeavyFilter(inputPath, outputPath, progress =>
+                {
+                    _liveProgress[taskId] = progress;
+                }, filterType, cts.Token); 
 
-            imageTask.Status = ImageTaskStatus.Completed;
-            imageTask.Progress = 100;
-            imageTask.CompletedAt = DateTime.UtcNow;
-            imageTask.ResultImageUrl = $"/images/{imageTask.Id}_processed.jpg";
-            await _context.SaveChangesAsync();
-
-            _liveProgress.TryRemove(taskId, out _);
-
-            return Ok(new
+                imageTask.Status = ImageTaskStatus.Completed;
+                imageTask.Progress = 100;
+                imageTask.CompletedAt = DateTime.UtcNow;
+                imageTask.ResultImageUrl = $"/images/{imageTask.Id}_processed.jpg";
+            }
+            catch (OperationCanceledException)
             {
-                Message = "Зображення успішно оброблено!",
-                TaskId = imageTask.Id,
-                ResultUrl = imageTask.ResultImageUrl
-            });
+                imageTask.Status = (ImageTaskStatus)99; 
+                imageTask.Progress = -1; 
+                imageTask.CompletedAt = DateTime.UtcNow;
+            }
+            finally
+            {
+                await _context.SaveChangesAsync();
+                _liveProgress.TryRemove(taskId, out _);
+                _cancelTokens.TryRemove(taskId, out _);
+            }
+
+            return Ok(new { Message = "Обробку завершено або зупинено", TaskId = imageTask.Id });
+        }
+
+        [HttpPost("cancel/{id}")]
+        public IActionResult CancelTask(string id)
+        {
+            if (_cancelTokens.TryGetValue(id, out var cts))
+            {
+                cts.Cancel(); 
+                return Ok(new { message = "Надіслано команду на скасування." });
+            }
+            return NotFound("Завдання не знайдено або вже завершено.");
         }
 
         [HttpGet("status/{id}")]
         public IActionResult GetTaskStatus(string id)
         {
             if (_liveProgress.TryGetValue(id, out int liveProgress))
-            {
                 return Ok(new { progress = liveProgress, status = "Processing" });
-            }
 
             if (Guid.TryParse(id, out Guid guidId))
             {
                 var task = _context.ImageTasks.Find(guidId);
                 if (task != null)
                 {
-                    return Ok(new
-                    {
-                        progress = task.Progress,
-                        status = task.Status.ToString(),
-                        resultUrl = task.ResultImageUrl
-                    });
+                    if (task.Progress == -1) return Ok(new { progress = 0, status = "Cancelled", resultUrl = "" });
+
+                    return Ok(new { progress = task.Progress, status = task.Status.ToString(), resultUrl = task.ResultImageUrl });
                 }
             }
-
             return NotFound();
         }
     }
