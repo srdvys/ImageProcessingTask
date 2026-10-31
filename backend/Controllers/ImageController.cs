@@ -39,6 +39,9 @@ namespace Backend.Controllers
             if (file == null || file.Length == 0)
                 return BadRequest("Будь ласка, виберіть файл.");
 
+            if (file.Length > 5 * 1024 * 1024)
+                return BadRequest("Перевищено ліміт трудомісткості: розмір файлу більший за 5 МБ.");
+
             if (string.IsNullOrEmpty(taskId))
                 taskId = Guid.NewGuid().ToString();
 
