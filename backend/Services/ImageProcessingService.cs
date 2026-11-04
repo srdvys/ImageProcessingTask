@@ -1,5 +1,6 @@
 ﻿using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,6 +12,9 @@ namespace Backend.Services
         public void ApplyHeavyFilter(string inputPath, string outputPath, Action<int> reportProgress, string filterType = "grayscale", CancellationToken cancellationToken = default)
         {
             using var image = Image.Load<Rgba32>(inputPath);
+
+            image.Mutate(x => x.AutoOrient());
+
             int width = image.Width;
             int height = image.Height;
             int totalPixels = width * height;

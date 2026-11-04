@@ -34,6 +34,10 @@ namespace Backend.Controllers
         [HttpPost]
         public async Task<IActionResult> UploadImage()
         {
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine($"\n[УВАГА] ЗАПИТ ОБРОБЛЯЄ СЕРВЕР НА ПОРТУ: {HttpContext.Connection.LocalPort}");
+            Console.ResetColor();
+
             var file = Request.Form.Files.FirstOrDefault();
             var filterType = Request.Form["filterType"].ToString();
             var taskId = Request.Form["taskId"].ToString();
@@ -84,7 +88,7 @@ namespace Backend.Controllers
                 _processingService.ApplyHeavyFilter(inputPath, outputPath, progress =>
                 {
                     _liveProgress[taskId] = progress;
-                }, filterType, cts.Token); 
+                }, filterType, cts.Token);
 
                 imageTask.Status = ImageTaskStatus.Completed;
                 imageTask.Progress = 100;
@@ -93,8 +97,8 @@ namespace Backend.Controllers
             }
             catch (OperationCanceledException)
             {
-                imageTask.Status = (ImageTaskStatus)99; 
-                imageTask.Progress = -1; 
+                imageTask.Status = (ImageTaskStatus)99;
+                imageTask.Progress = -1;
                 imageTask.CompletedAt = DateTime.UtcNow;
             }
             finally
@@ -112,7 +116,7 @@ namespace Backend.Controllers
         {
             if (_cancelTokens.TryGetValue(id, out var cts))
             {
-                cts.Cancel(); 
+                cts.Cancel();
                 return Ok(new { message = "Надіслано команду на скасування." });
             }
             return NotFound("Завдання не знайдено або вже завершено.");
@@ -121,6 +125,10 @@ namespace Backend.Controllers
         [HttpGet("status/{id}")]
         public IActionResult GetTaskStatus(string id)
         {
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine($"[ІНФО] Перевірка прогресу на порту: {HttpContext.Connection.LocalPort}");
+            Console.ResetColor();
+
             if (_liveProgress.TryGetValue(id, out int liveProgress))
                 return Ok(new { progress = liveProgress, status = "Processing" });
 
