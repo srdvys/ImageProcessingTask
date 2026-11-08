@@ -157,89 +157,103 @@
     </div>
 
     <script>
-                function generateUUID() {
-                    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-                        var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-                        return v.toString(16);
-                    });
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+                var r = Math.random() * 16 | 0,
+                    v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        let currentTaskId = null;
+        let progressInterval = null; 
+
+        document.getElementById("cancel-btn").onclick = async () => {
+            if (!currentTaskId) return;
+            await fetch(`http://localhost:5000/api/image/cancel/${currentTaskId}`, { method: 'POST' });
+            document.getElementById("cancel-btn").style.display = "none";
+        };
+
+        document.getElementById("uploadForm").onsubmit = async (e) => {
+            e.preventDefault();
+
+            const fileInput = document.getElementById('imageInput');
+            if (fileInput.files.length > 0) {
+                const fileSize = fileInput.files[0].size / 1024 / 1024;
+                if (fileSize > 5) {
+                    alert("Відмова у виконанні: Розмір файлу перевищує ліміт у 5 МБ.");
+                    return;
                 }
+            }
 
-                let currentTaskId = null;
+            const formData = new FormData(e.target);
+            const taskId = generateUUID();
+            currentTaskId = taskId;
+            formData.append("taskId", taskId);
 
-                document.getElementById("cancel-btn").onclick = async () => {
-                    if (!currentTaskId) return;
-                    await fetch(`http://localhost:5000/api/image/cancel/${currentTaskId}`, { method: 'POST' });
+            document.getElementById("progress-wrapper").style.display = "block";
+            document.getElementById("progress-bar").style.width = "0%";
+            document.getElementById("progress-bar").innerText = "0%";
+            document.getElementById("progress-bar").style.backgroundColor = "#10b981";
+            document.getElementById("result-image").style.display = "none";
+            document.getElementById("cancel-btn").style.display = "block";
+
+            checkProgress(taskId);
+
+            try {
+                const response = await fetch("http://localhost:5000/api/image", {
+                    method: "POST",
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errorMessage = await response.text();
+
+                    clearInterval(progressInterval);
+                    document.getElementById("progress-wrapper").style.display = "none";
                     document.getElementById("cancel-btn").style.display = "none";
-                };
 
-                document.getElementById("uploadForm").onsubmit = async (e) => {
-                    e.preventDefault();
-
-                    const fileInput = document.getElementById('imageInput');
-                    if (fileInput.files.length > 0) {
-                        const fileSize = fileInput.files[0].size / 1024 / 1024;
-                        if (fileSize > 5) {
-                            alert("Відмова у виконанні: Розмір файлу перевищує ліміт у 5 МБ.");
-                            return;
-                        }
-                    }
-
-                    const formData = new FormData(e.target);
-                    const taskId = generateUUID();
-                    currentTaskId = taskId;
-                    formData.append("taskId", taskId);
-
-                    document.getElementById("progress-wrapper").style.display = "block";
-                    document.getElementById("progress-bar").style.width = "0%";
-                    document.getElementById("progress-bar").innerText = "0%";
-                    document.getElementById("progress-bar").style.backgroundColor = "#10b981"; 
-                    document.getElementById("result-image").style.display = "none";
-                    document.getElementById("cancel-btn").style.display = "block"; 
-
-                    checkProgress(taskId);
-
-                    try {
-                        await fetch("http://localhost:5000/api/image", {
-                            method: "POST",
-                            body: formData
-                        });
-                    } catch (err) {
-                        console.error("Помилка:", err);
-                    }
-                };
-
-                async function checkProgress(taskId) {
-                    const interval = setInterval(async () => {
-                        try {
-                            const res = await fetch(`http://localhost:5000/api/image/status/${taskId}`);
-
-                            if (!res.ok) return;
-
-                            const statusData = await res.json();
-
-                            if (statusData.status === "Cancelled") {
-                                clearInterval(interval);
-                                document.getElementById("progress-bar").style.width = "100%";
-                                document.getElementById("progress-bar").innerText = "Скасовано";
-                                document.getElementById("progress-bar").style.backgroundColor = "#ef4444"; 
-                                document.getElementById("cancel-btn").style.display = "none";
-                                return;
-                            }
-
-                            document.getElementById("progress-bar").style.width = statusData.progress + "%";
-                            document.getElementById("progress-bar").innerText = statusData.progress + "%";
-
-                            if (statusData.progress >= 100 && statusData.resultUrl) {
-                                clearInterval(interval);
-                                document.getElementById("cancel-btn").style.display = "none";
-                                document.getElementById("result-image").src = "http://localhost:5000" + statusData.resultUrl;
-                                document.getElementById("result-image").style.display = "block";
-                            }
-                        } catch (err) {
-                            console.error("Помилка з'єднання:", err);
-                        }
-                    }, 500);
+                    alert("Увага: " + errorMessage);
+                    return;
                 }
+            } catch (err) {
+                console.error("Помилка:", err);
+                clearInterval(progressInterval);
+            }
+        };
+
+        async function checkProgress(taskId) {
+            progressInterval = setInterval(async () => {
+                try {
+                    const res = await fetch(`http://localhost:5000/api/image/status/${taskId}`);
+
+                    if (!res.ok) return;
+
+                    const statusData = await res.json();
+
+                    if (statusData.status === "Cancelled") {
+                        clearInterval(progressInterval);
+                        document.getElementById("progress-bar").style.width = "100%";
+                        document.getElementById("progress-bar").innerText = "Скасовано";
+                        document.getElementById("progress-bar").style.backgroundColor = "#ef4444";
+                        document.getElementById("cancel-btn").style.display = "none";
+                        return;
+                    }
+
+                    document.getElementById("progress-bar").style.width = statusData.progress + "%";
+                    document.getElementById("progress-bar").innerText = statusData.progress + "%";
+
+                    if (statusData.progress >= 100 && statusData.resultUrl) {
+                        clearInterval(progressInterval);
+                        document.getElementById("cancel-btn").style.display = "none";
+                        document.getElementById("result-image").src = "http://localhost:5000" + statusData.resultUrl;
+                        document.getElementById("result-image").style.display = "block";
+                    }
+                } catch (err) {
+                    console.error("Помилка з'єднання:", err);
+                }
+            }, 500);
+        }
     </script>
 </body>
 </html>

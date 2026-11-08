@@ -54,6 +54,27 @@ namespace Backend.Controllers
                 await _context.SaveChangesAsync();
             }
 
+            var zombieTasks = _context.ImageTasks
+                .Where(t => t.UserId == user.Id && t.Status == ImageTaskStatus.Processing && t.CreatedAt < DateTime.UtcNow.AddMinutes(-3))
+                .ToList();
+
+            if (zombieTasks.Any())
+            {
+                foreach (var zombie in zombieTasks)
+                {
+                    zombie.Status = (ImageTaskStatus)99;
+                }
+                await _context.SaveChangesAsync();
+            }
+
+            var activeTaskExists = _context.ImageTasks
+                .Any(t => t.UserId == user.Id && t.Status == ImageTaskStatus.Processing);
+
+            if (activeTaskExists)
+            {
+                return BadRequest("У вас вже є активна задача обробки. Дочекайтеся її завершення або скасуйте поточну, перш ніж завантажувати нове фото.");
+            }
+
             var imageTask = new ImageTask
             {
                 Id = Guid.Parse(taskId),
