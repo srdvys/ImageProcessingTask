@@ -165,5 +165,25 @@ namespace Backend.Controllers
             }
             return NotFound();
         }
+
+        [HttpGet("history")]
+        public IActionResult GetHistory()
+        {
+            var user = _context.Users.FirstOrDefault();
+            if (user == null) return NotFound("Користувача не знайдено.");
+
+            var tasks = _context.ImageTasks
+                .Where(t => t.UserId == user.Id && t.Status == ImageTaskStatus.Completed)
+                .OrderByDescending(t => t.CompletedAt)
+                .Select(t => new {
+                    t.Id,
+                    t.OriginalFileName,
+                    t.ResultImageUrl,
+                    t.CompletedAt
+                })
+                .ToList();
+
+            return Ok(tasks);
+        }
     }
 }

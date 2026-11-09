@@ -10,10 +10,10 @@
             background-color: #f0f2f5;
             display: flex;
             justify-content: center;
-            align-items: center;
+            align-items: flex-start;
             min-height: 100vh;
             margin: 0;
-            padding: 20px;
+            padding: 40px 20px;
             box-sizing: border-box;
         }
 
@@ -23,7 +23,7 @@
             border-radius: 16px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.08);
             width: 100%;
-            max-width: 450px;
+            max-width: 500px;
             text-align: center;
         }
 
@@ -128,6 +128,68 @@
             border-radius: 12px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         }
+
+        .history-section {
+            margin-top: 40px;
+            border-top: 2px solid #e5e7eb;
+            padding-top: 20px;
+            text-align: left;
+        }
+
+            .history-section h3 {
+                font-size: 20px;
+                color: #1a1a1a;
+                margin-bottom: 15px;
+                text-align: center;
+            }
+
+        .history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .history-card {
+            display: flex;
+            align-items: center;
+            background: #f9fafb;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            padding: 10px;
+            text-decoration: none;
+            color: inherit;
+            transition: box-shadow 0.2s;
+        }
+
+            .history-card:hover {
+                box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            }
+
+        .history-thumb {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 6px;
+            margin-right: 15px;
+            background-color: #e5e7eb;
+        }
+
+        .history-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .history-filename {
+            font-weight: 600;
+            font-size: 14px;
+            color: #374151;
+            margin-bottom: 4px;
+        }
+
+        .history-date {
+            font-size: 12px;
+            color: #6b7280;
+        }
     </style>
 </head>
 <body>
@@ -154,6 +216,12 @@
         <button type="button" id="cancel-btn">Скасувати задачу</button>
 
         <img id="result-image" alt="Оброблено" />
+
+        <div class="history-section">
+            <h3>Історія обробок</h3>
+            <div class="history-list" id="history-container">
+            </div>
+        </div>
     </div>
 
     <script>
@@ -166,7 +234,7 @@
         }
 
         let currentTaskId = null;
-        let progressInterval = null; 
+        let progressInterval = null;
 
         document.getElementById("cancel-btn").onclick = async () => {
             if (!currentTaskId) return;
@@ -208,11 +276,9 @@
 
                 if (!response.ok) {
                     const errorMessage = await response.text();
-
                     clearInterval(progressInterval);
                     document.getElementById("progress-wrapper").style.display = "none";
                     document.getElementById("cancel-btn").style.display = "none";
-
                     alert("Увага: " + errorMessage);
                     return;
                 }
@@ -248,12 +314,50 @@
                         document.getElementById("cancel-btn").style.display = "none";
                         document.getElementById("result-image").src = "http://localhost:5000" + statusData.resultUrl;
                         document.getElementById("result-image").style.display = "block";
+
+                        loadHistory();
                     }
                 } catch (err) {
                     console.error("Помилка з'єднання:", err);
                 }
             }, 500);
         }
+
+        async function loadHistory() {
+            try {
+                const res = await fetch("http://localhost:5000/api/image/history");
+                if (!res.ok) return;
+
+                const historyData = await res.json();
+                const container = document.getElementById("history-container");
+                container.innerHTML = "";
+
+                if (historyData.length === 0) {
+                    container.innerHTML = "<div style='text-align:center; color:#6b7280; font-size:14px;'>Історія порожня</div>";
+                    return;
+                }
+
+                historyData.forEach(item => {
+                    const date = new Date(item.completedAt).toLocaleString("uk-UA");
+                    const url = "http://localhost:5000" + item.resultImageUrl;
+
+                    const card = `
+                        <a href="${url}" target="_blank" class="history-card">
+                            <img src="${url}" class="history-thumb" alt="Мініатюра" onerror="this.closest('.history-card').style.display='none'">
+                            <div class="history-info">
+                                <span class="history-filename">${item.originalFileName}</span>
+                                <span class="history-date">${date}</span>
+                            </div>
+                        </a>
+                    `;
+                    container.insertAdjacentHTML('beforeend', card);
+                });
+            } catch (err) {
+                console.error("Помилка завантаження історії:", err);
+            }
+        }
+
+        window.addEventListener("DOMContentLoaded", loadHistory);
     </script>
 </body>
 </html>
