@@ -17,7 +17,7 @@
             box-sizing: border-box;
         }
 
-        .main-container {
+        .container {
             background-color: #ffffff;
             padding: 40px;
             border-radius: 16px;
@@ -34,7 +34,7 @@
             margin-bottom: 25px;
         }
 
-        input[type="file"], select {
+        input[type="text"], input[type="password"], input[type="file"], select {
             width: 100%;
             padding: 12px;
             margin-bottom: 20px;
@@ -44,6 +44,9 @@
             font-size: 15px;
             background-color: #f9fafb;
             color: #374151;
+        }
+
+        input[type="file"] {
             cursor: pointer;
         }
 
@@ -62,11 +65,11 @@
                     background: #d1d5db;
                 }
 
-            select:focus, input[type="file"]:focus {
-                outline: none;
-                border-color: #3b82f6;
-                box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-            }
+        select:focus, input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
 
         button {
             background-color: #3b82f6;
@@ -89,6 +92,33 @@
                 transform: scale(0.98);
             }
 
+        #cancel-btn {
+            background-color: #ef4444;
+            margin-top: 15px;
+            display: none;
+        }
+
+            #cancel-btn:hover {
+                background-color: #dc2626;
+            }
+
+        #logout-btn {
+            background-color: #6b7280;
+            margin-top: 20px;
+        }
+
+            #logout-btn:hover {
+                background-color: #4b5563;
+            }
+
+        .toggle-link {
+            color: #3b82f6;
+            cursor: pointer;
+            margin-top: 15px;
+            font-size: 14px;
+            text-decoration: underline;
+        }
+
         #progress-wrapper {
             width: 100%;
             background-color: #e5e7eb;
@@ -110,16 +140,6 @@
             font-size: 13px;
             transition: width 0.4s ease;
         }
-
-        #cancel-btn {
-            background-color: #ef4444;
-            margin-top: 15px;
-            display: none;
-        }
-
-            #cancel-btn:hover {
-                background-color: #dc2626;
-            }
 
         #result-image {
             max-width: 100%;
@@ -193,11 +213,21 @@
     </style>
 </head>
 <body>
-    <div class="main-container">
+
+    <div class="container" id="auth-container">
+        <h2 id="auth-title">Вхід у систему</h2>
+        <form id="authForm">
+            <input type="text" id="username" name="username" placeholder="Логін" required>
+            <input type="password" id="password" name="password" placeholder="Пароль" required>
+            <button type="submit" id="auth-submit-btn">Увійти</button>
+        </form>
+        <div class="toggle-link" id="toggle-auth">Немає акаунту? Зареєструватися</div>
+    </div>
+
+    <div class="container" id="main-container" style="display: none;">
         <h2>Завантажити фотографію</h2>
         <form id="uploadForm">
             <input type="file" id="imageInput" name="file" required accept="image/*">
-
             <select name="filterType">
                 <option value="grayscale">Чорно-білий</option>
                 <option value="negative">Негатив</option>
@@ -205,30 +235,92 @@
                 <option value="red">Червоний відтінок</option>
                 <option value="blue">Синій відтінок</option>
             </select>
-
             <button type="submit">Відправити фото</button>
         </form>
 
         <div id="progress-wrapper">
             <div id="progress-bar">0%</div>
         </div>
-
         <button type="button" id="cancel-btn">Скасувати задачу</button>
-
         <img id="result-image" alt="Оброблено" />
 
         <div class="history-section">
-            <h3>Історія обробок</h3>
-            <div class="history-list" id="history-container">
-            </div>
+            <h3>Моя історія обробок</h3>
+            <div class="history-list" id="history-container"></div>
         </div>
+
+        <button type="button" id="logout-btn">Вийти з акаунту</button>
     </div>
 
     <script>
+        let isLoginMode = true;
+        const authContainer = document.getElementById("auth-container");
+        const mainContainer = document.getElementById("main-container");
+        const toggleAuthBtn = document.getElementById("toggle-auth");
+        const authTitle = document.getElementById("auth-title");
+        const authSubmitBtn = document.getElementById("auth-submit-btn");
+
+        toggleAuthBtn.onclick = () => {
+            isLoginMode = !isLoginMode;
+            authTitle.innerText = isLoginMode ? "Вхід у систему" : "Реєстрація";
+            authSubmitBtn.innerText = isLoginMode ? "Увійти" : "Зареєструватися";
+            toggleAuthBtn.innerText = isLoginMode ? "Немає акаунту? Зареєструватися" : "Вже є акаунт? Увійти";
+        };
+
+        document.getElementById("authForm").onsubmit = async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const endpoint = isLoginMode ? "login" : "register";
+
+            try {
+                const res = await fetch(`http://localhost:5000/api/auth/${endpoint}`, {
+                    method: "POST",
+                    body: formData
+                });
+
+                if (!res.ok) {
+                    const errorText = await res.text();
+                    alert("Помилка: " + errorText);
+                    return;
+                }
+
+                const data = await res.json();
+                if (isLoginMode) {
+                    localStorage.setItem("jwtToken", data.token); 
+                    checkAuthStatus();
+                } else {
+                    alert("Реєстрація успішна! Тепер ви можете увійти.");
+                    toggleAuthBtn.click(); 
+                }
+            } catch (err) {
+                console.error("Помилка авторизації", err);
+            }
+        };
+
+        document.getElementById("logout-btn").onclick = () => {
+            localStorage.removeItem("jwtToken");
+            checkAuthStatus();
+        };
+
+        function getAuthHeaders() {
+            return { 'Authorization': 'Bearer ' + localStorage.getItem("jwtToken") };
+        }
+
+        function checkAuthStatus() {
+            const token = localStorage.getItem("jwtToken");
+            if (token) {
+                authContainer.style.display = "none";
+                mainContainer.style.display = "block";
+                loadHistory();
+            } else {
+                authContainer.style.display = "block";
+                mainContainer.style.display = "none";
+            }
+        }
+
         function generateUUID() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-                var r = Math.random() * 16 | 0,
-                    v = c === 'x' ? r : (r & 0x3 | 0x8);
+                var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
                 return v.toString(16);
             });
         }
@@ -238,7 +330,10 @@
 
         document.getElementById("cancel-btn").onclick = async () => {
             if (!currentTaskId) return;
-            await fetch(`http://localhost:5000/api/image/cancel/${currentTaskId}`, { method: 'POST' });
+            await fetch(`http://localhost:5000/api/image/cancel/${currentTaskId}`, {
+                method: 'POST',
+                headers: getAuthHeaders() 
+            });
             document.getElementById("cancel-btn").style.display = "none";
         };
 
@@ -246,12 +341,9 @@
             e.preventDefault();
 
             const fileInput = document.getElementById('imageInput');
-            if (fileInput.files.length > 0) {
-                const fileSize = fileInput.files[0].size / 1024 / 1024;
-                if (fileSize > 5) {
-                    alert("Відмова у виконанні: Розмір файлу перевищує ліміт у 5 МБ.");
-                    return;
-                }
+            if (fileInput.files.length > 0 && (fileInput.files[0].size / 1024 / 1024) > 5) {
+                alert("Відмова у виконанні: Розмір файлу перевищує ліміт у 5 МБ.");
+                return;
             }
 
             const formData = new FormData(e.target);
@@ -271,8 +363,15 @@
             try {
                 const response = await fetch("http://localhost:5000/api/image", {
                     method: "POST",
+                    headers: getAuthHeaders(), 
                     body: formData
                 });
+
+                if (response.status === 401) {
+                    alert("Сесія закінчилася. Будь ласка, увійдіть знову.");
+                    document.getElementById("logout-btn").click();
+                    return;
+                }
 
                 if (!response.ok) {
                     const errorMessage = await response.text();
@@ -280,7 +379,6 @@
                     document.getElementById("progress-wrapper").style.display = "none";
                     document.getElementById("cancel-btn").style.display = "none";
                     alert("Увага: " + errorMessage);
-                    return;
                 }
             } catch (err) {
                 console.error("Помилка:", err);
@@ -292,11 +390,9 @@
             progressInterval = setInterval(async () => {
                 try {
                     const res = await fetch(`http://localhost:5000/api/image/status/${taskId}`);
-
                     if (!res.ok) return;
 
                     const statusData = await res.json();
-
                     if (statusData.status === "Cancelled") {
                         clearInterval(progressInterval);
                         document.getElementById("progress-bar").style.width = "100%";
@@ -314,18 +410,23 @@
                         document.getElementById("cancel-btn").style.display = "none";
                         document.getElementById("result-image").src = "http://localhost:5000" + statusData.resultUrl;
                         document.getElementById("result-image").style.display = "block";
-
                         loadHistory();
                     }
-                } catch (err) {
-                    console.error("Помилка з'єднання:", err);
-                }
+                } catch (err) { console.error("Помилка з'єднання:", err); }
             }, 500);
         }
 
         async function loadHistory() {
             try {
-                const res = await fetch("http://localhost:5000/api/image/history");
+                const res = await fetch("http://localhost:5000/api/image/history", {
+                    headers: getAuthHeaders() 
+                });
+
+                if (res.status === 401) {
+                    document.getElementById("logout-btn").click();
+                    return;
+                }
+
                 if (!res.ok) return;
 
                 const historyData = await res.json();
@@ -340,24 +441,21 @@
                 historyData.forEach(item => {
                     const date = new Date(item.completedAt).toLocaleString("uk-UA");
                     const url = "http://localhost:5000" + item.resultImageUrl;
-
                     const card = `
-                        <a href="${url}" target="_blank" class="history-card">
-                            <img src="${url}" class="history-thumb" alt="Мініатюра" onerror="this.closest('.history-card').style.display='none'">
-                            <div class="history-info">
-                                <span class="history-filename">${item.originalFileName}</span>
-                                <span class="history-date">${date}</span>
-                            </div>
-                        </a>
-                    `;
+                            <a href="${url}" target="_blank" class="history-card">
+                                <img src="${url}" class="history-thumb" alt="Мініатюра" onerror="this.closest('.history-card').style.display='none'">
+                                <div class="history-info">
+                                    <span class="history-filename">${item.originalFileName}</span>
+                                    <span class="history-date">${date}</span>
+                                </div>
+                            </a>
+                        `;
                     container.insertAdjacentHTML('beforeend', card);
                 });
-            } catch (err) {
-                console.error("Помилка завантаження історії:", err);
-            }
+            } catch (err) { console.error("Помилка завантаження історії:", err); }
         }
 
-        window.addEventListener("DOMContentLoaded", loadHistory);
+        window.addEventListener("DOMContentLoaded", checkAuthStatus);
     </script>
 </body>
 </html>

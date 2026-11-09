@@ -10,9 +10,11 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Backend.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/[controller]")]
     public class ImageController : ControllerBase
@@ -46,13 +48,9 @@ namespace Backend.Controllers
             if (file.Length > 5 * 1024 * 1024) return BadRequest("Перевищено ліміт трудомісткості: розмір файлу більший за 5 МБ.");
             if (string.IsNullOrEmpty(taskId)) taskId = Guid.NewGuid().ToString();
 
-            var user = _context.Users.FirstOrDefault();
-            if (user == null)
-            {
-                user = new User { Username = "TestUser", PasswordHash = "TestHash123" };
-                _context.Users.Add(user);
-                await _context.SaveChangesAsync();
-            }
+            var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var user = _context.Users.FirstOrDefault(u => u.Id.ToString() == userIdString);
+            if (user == null) return Unauthorized("Користувача не знайдено або термін сесії минув.");
 
             var zombieTasks = _context.ImageTasks
                 .Where(t => t.UserId == user.Id && t.Status == ImageTaskStatus.Processing && t.CreatedAt < DateTime.UtcNow.AddMinutes(-3))
@@ -144,6 +142,7 @@ namespace Backend.Controllers
         }
 
         [HttpGet("status/{id}")]
+        [AllowAnonymous]
         public IActionResult GetTaskStatus(string id)
         {
             Console.ForegroundColor = ConsoleColor.Cyan;
@@ -169,8 +168,9 @@ namespace Backend.Controllers
         [HttpGet("history")]
         public IActionResult GetHistory()
         {
-            var user = _context.Users.FirstOrDefault();
-            if (user == null) return NotFound("Користувача не знайдено.");
+            var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var user = _context.Users.FirstOrDefault(u => u.Id.ToString() == userIdString);
+            if (user == null) return Unauthorized("Користувача не знайдено або термін сесії минув.");
 
             var tasks = _context.ImageTasks
                 .Where(t => t.UserId == user.Id && t.Status == ImageTaskStatus.Completed)
