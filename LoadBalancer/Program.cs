@@ -12,6 +12,13 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+app.UseStaticFiles();
+
+app.MapGet("/", (IWebHostEnvironment env) =>
+{
+    var htmlPath = System.IO.Path.Combine(env.ContentRootPath, "wwwroot", "index.html");
+    return Results.File(htmlPath, "text/html");
+});
 
 app.UseCors("AllowAll");
 app.MapReverseProxy();

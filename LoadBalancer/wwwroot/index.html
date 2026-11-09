@@ -273,7 +273,7 @@
             const endpoint = isLoginMode ? "login" : "register";
 
             try {
-                const res = await fetch(`http://localhost:5000/api/auth/${endpoint}`, {
+                const res = await fetch(`https://localhost:5005/api/auth/${endpoint}`, {
                     method: "POST",
                     body: formData
                 });
@@ -330,7 +330,7 @@
 
         document.getElementById("cancel-btn").onclick = async () => {
             if (!currentTaskId) return;
-            await fetch(`http://localhost:5000/api/image/cancel/${currentTaskId}`, {
+            await fetch(`https://localhost:5005/api/image/cancel/${currentTaskId}`, {
                 method: 'POST',
                 headers: getAuthHeaders() 
             });
@@ -361,7 +361,7 @@
             checkProgress(taskId);
 
             try {
-                const response = await fetch("http://localhost:5000/api/image", {
+                const response = await fetch("https://localhost:5005/api/image", {
                     method: "POST",
                     headers: getAuthHeaders(), 
                     body: formData
@@ -389,7 +389,7 @@
         async function checkProgress(taskId) {
             progressInterval = setInterval(async () => {
                 try {
-                    const res = await fetch(`http://localhost:5000/api/image/status/${taskId}`);
+                    const res = await fetch(`https://localhost:5005/api/image/status/${taskId}`);
                     if (!res.ok) return;
 
                     const statusData = await res.json();
@@ -408,7 +408,7 @@
                     if (statusData.progress >= 100 && statusData.resultUrl) {
                         clearInterval(progressInterval);
                         document.getElementById("cancel-btn").style.display = "none";
-                        document.getElementById("result-image").src = "http://localhost:5000" + statusData.resultUrl;
+                        document.getElementById("result-image").src = "https://localhost:5005" + statusData.resultUrl;
                         document.getElementById("result-image").style.display = "block";
                         loadHistory();
                     }
@@ -418,7 +418,7 @@
 
         async function loadHistory() {
             try {
-                const res = await fetch("http://localhost:5000/api/image/history", {
+                const res = await fetch("https://localhost:5005/api/image/history", {
                     headers: getAuthHeaders() 
                 });
 
@@ -440,7 +440,7 @@
 
                 historyData.forEach(item => {
                     const date = new Date(item.completedAt).toLocaleString("uk-UA");
-                    const url = "http://localhost:5000" + item.resultImageUrl;
+                    const url = "https://localhost:5005" + item.resultImageUrl;
                     const card = `
                             <a href="${url}" target="_blank" class="history-card">
                                 <img src="${url}" class="history-thumb" alt="Мініатюра" onerror="this.closest('.history-card').style.display='none'">
