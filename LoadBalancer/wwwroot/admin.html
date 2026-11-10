@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Панель адміністратора | Моніторинг серверів</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f4f7f6;
+            padding: 20px;
+            color: #333;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.5rem;
+        }
+
+        .server-badge {
+            color: white;
+            padding: 10px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #fff;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+        }
+
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+
+        .status-completed {
+            color: #28a745;
+            font-weight: bold;
+        }
+
+        .status-processing {
+            color: #fd7e14;
+            font-weight: bold;
+        }
+
+        .status-cancelled {
+            color: #dc3545;
+            font-weight: bold;
+        }
+
+        .task-id {
+            font-size: 0.8em;
+            color: #888;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Моніторинг навантаження</h1>
+        <div class="server-badge" id="serverInfo" style="background: #6c757d;">Очікування даних...</div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Час</th>
+                <th>ID Задачі</th>
+                <th>Файл</th>
+                <th>Статус</th>
+                <th>Прогрес</th>
+            </tr>
+        </thead>
+        <tbody id="tasksTableBody">
+        </tbody>
+    </table>
+
+    <script>
+        async function fetchAdminData() {
+            try {
+                const response = await fetch('/api/image/admin/tasks');
+                if (!response.ok) return;
+
+                const data = await response.json();
+
+                const badge = document.getElementById('serverInfo');
+                badge.innerText = 'Запит обробив порт: ' + data.serverPort;
+                badge.style.backgroundColor = data.serverPort === 5001 ? '#17a2b8' : '#6f42c1';
+
+                const tbody = document.getElementById('tasksTableBody');
+                tbody.innerHTML = '';
+
+                data.tasks.forEach(task => {
+                    let statusClass = 'status-processing';
+                    let statusText = 'Обробляється';
+
+                    if (task.status === 'Completed') { statusClass = 'status-completed'; statusText = 'Завершено'; }
+                    else if (task.status === 'Cancelled') { statusClass = 'status-cancelled'; statusText = 'Скасовано'; }
+
+                    let progressText = task.progress >= 0 ? task.progress + '%' : '-';
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${task.createdAt}</td>
+                        <td class="task-id">${task.id}</td>
+                        <td>${task.fileName}</td>
+                        <td class="${statusClass}">${statusText}</td>
+                        <td>${progressText}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (error) {
+                console.error('Помилка оновлення адмінки:', error);
+            }
+        }
+
+        setInterval(fetchAdminData, 2000);
+        fetchAdminData();
+    </script>
+</body>
+</html>

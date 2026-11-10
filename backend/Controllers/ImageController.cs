@@ -185,5 +185,30 @@ namespace Backend.Controllers
 
             return Ok(tasks);
         }
+
+        [HttpGet("admin/tasks")]
+        [AllowAnonymous] 
+        public IActionResult GetAllTasksForAdmin()
+        {
+            var dbTasks = _context.ImageTasks
+                .OrderByDescending(t => t.CreatedAt)
+                .Take(50)
+                .ToList();
+
+            var result = dbTasks.Select(t => new {
+                id = t.Id,
+                userId = t.UserId,
+                fileName = t.OriginalFileName,
+                status = (int)t.Status == 99 ? "Cancelled" : t.Status.ToString(),
+                progress = _liveProgress.TryGetValue(t.Id.ToString(), out int liveProg) ? liveProg : t.Progress,
+                createdAt = t.CreatedAt.ToLocalTime().ToString("HH:mm:ss")
+            });
+
+            return Ok(new
+            {
+                serverPort = HttpContext.Connection.LocalPort,
+                tasks = result
+            });
+        }
     }
 }
