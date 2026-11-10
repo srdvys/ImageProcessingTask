@@ -11,8 +11,17 @@ namespace Backend.Services
     {
         public void ApplyHeavyFilter(string inputPath, string outputPath, Action<int> reportProgress, string filterType = "grayscale", CancellationToken cancellationToken = default)
         {
-            using var image = Image.Load<Rgba32>(inputPath);
+            if (System.IO.File.Exists(outputPath))
+            {
+                System.IO.File.Delete(outputPath);
+            }
 
+            if (cancellationToken.WaitHandle.WaitOne(3000))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+
+            using var image = Image.Load<Rgba32>(inputPath);
             image.Mutate(x => x.AutoOrient());
 
             int width = image.Width;
@@ -27,7 +36,8 @@ namespace Backend.Services
 
             var parallelOptions = new ParallelOptions
             {
-                CancellationToken = cancellationToken
+                CancellationToken = cancellationToken,
+                MaxDegreeOfParallelism = Environment.ProcessorCount
             };
 
             try
@@ -88,13 +98,20 @@ namespace Backend.Services
                         pixelBytes[pixelOffset + 2] = newB;
                     }
 
-                    System.Threading.Thread.Sleep(5);
+                    if (y % 20 == 0)
+                    {
+                        System.Threading.Thread.Sleep(50);
+                    }
 
                     lock (lockObj)
                     {
                         processedPixels += width;
                         int progress = (int)((double)processedPixels / totalPixels * 100);
-                        reportProgress?.Invoke(progress);
+
+                        if (y % 10 == 0 || y == height - 1)
+                        {
+                            reportProgress?.Invoke(progress);
+                        }
                     }
                 });
 
@@ -103,8 +120,8 @@ namespace Backend.Services
             }
             catch (OperationCanceledException)
             {
-                Console.WriteLine("Завдання скасовано користувачем. Зупинка паралельних обчислень...");
-                throw; 
+                Console.WriteLine("Завдання скасовано користувачем.");
+                throw;
             }
         }
     }
