@@ -80,7 +80,8 @@ namespace Backend.Controllers
                 OriginalFileName = file.FileName,
                 Status = ImageTaskStatus.Processing,
                 Progress = 0,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                ServerPort = HttpContext.Connection.LocalPort 
             };
 
             _context.ImageTasks.Add(imageTask);
@@ -157,7 +158,7 @@ namespace Backend.Controllers
                 var task = _context.ImageTasks.Find(guidId);
                 if (task != null)
                 {
-                    if (task.Progress == -1) return Ok(new { progress = 0, status = "Cancelled", resultUrl = "" });
+                    if (task.Progress == -1 || (int)task.Status == 99) return Ok(new { progress = 0, status = "Cancelled", resultUrl = "" });
 
                     return Ok(new { progress = task.Progress, status = task.Status.ToString(), resultUrl = task.ResultImageUrl });
                 }
@@ -173,21 +174,44 @@ namespace Backend.Controllers
             if (user == null) return Unauthorized("Користувача не знайдено або термін сесії минув.");
 
             var tasks = _context.ImageTasks
-                .Where(t => t.UserId == user.Id && t.Status == ImageTaskStatus.Completed)
-                .OrderByDescending(t => t.CompletedAt)
+                .Where(t => t.UserId == user.Id && (t.Status == ImageTaskStatus.Completed || (int)t.Status == 99))
+                .OrderByDescending(t => t.CreatedAt)
                 .Select(t => new {
                     t.Id,
                     t.OriginalFileName,
-                    t.ResultImageUrl,
-                    t.CompletedAt
+                    ResultImageUrl = t.ResultImageUrl ?? "",
+                    Status = (int)t.Status == 99 ? "Cancelled" : t.Status.ToString(),
+                    t.CreatedAt
                 })
                 .ToList();
 
             return Ok(tasks);
         }
 
+        [HttpDelete("history/{id}")]
+        public async Task<IActionResult> DeleteTask(string id)
+        {
+            var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+            if (Guid.TryParse(id, out Guid guidId))
+            {
+                var task = _context.ImageTasks.Find(guidId);
+                if (task != null)
+                {
+                    if (task.UserId.ToString() != userIdString)
+                        return Unauthorized("Ви не можете видалити чужу задачу.");
+
+                    _context.ImageTasks.Remove(task);
+                    await _context.SaveChangesAsync();
+
+                    return Ok(new { message = "Задачу успішно видалено." });
+                }
+            }
+            return NotFound("Задачу не знайдено.");
+        }
+
         [HttpGet("admin/tasks")]
-        [AllowAnonymous] 
+        [AllowAnonymous]
         public IActionResult GetAllTasksForAdmin()
         {
             var dbTasks = _context.ImageTasks
@@ -201,14 +225,11 @@ namespace Backend.Controllers
                 fileName = t.OriginalFileName,
                 status = (int)t.Status == 99 ? "Cancelled" : t.Status.ToString(),
                 progress = _liveProgress.TryGetValue(t.Id.ToString(), out int liveProg) ? liveProg : t.Progress,
+                serverPort = t.ServerPort, 
                 createdAt = t.CreatedAt.ToLocalTime().ToString("HH:mm:ss")
             });
 
-            return Ok(new
-            {
-                serverPort = HttpContext.Connection.LocalPort,
-                tasks = result
-            });
+            return Ok(new { tasks = result });
         }
     }
 }

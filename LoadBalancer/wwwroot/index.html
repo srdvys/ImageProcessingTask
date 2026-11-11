@@ -172,11 +172,11 @@
         .history-card {
             display: flex;
             align-items: center;
+            justify-content: space-between;
             background: #f9fafb;
             border: 1px solid #d1d5db;
             border-radius: 8px;
             padding: 10px;
-            text-decoration: none;
             color: inherit;
             transition: box-shadow 0.2s;
         }
@@ -185,6 +185,14 @@
                 box-shadow: 0 4px 10px rgba(0,0,0,0.05);
             }
 
+        .history-content {
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+            color: inherit;
+            flex-grow: 1;
+        }
+
         .history-thumb {
             width: 60px;
             height: 60px;
@@ -192,6 +200,21 @@
             border-radius: 6px;
             margin-right: 15px;
             background-color: #e5e7eb;
+        }
+
+        .history-cancelled-thumb {
+            width: 60px;
+            height: 60px;
+            border-radius: 6px;
+            margin-right: 15px;
+            background-color: #fee2e2;
+            color: #ef4444;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: bold;
+            text-align: center;
         }
 
         .history-info {
@@ -210,6 +233,23 @@
             font-size: 12px;
             color: #6b7280;
         }
+
+        .delete-btn {
+            background-color: #fca5a5;
+            color: #7f1d1d;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            width: auto;
+            transition: background 0.2s;
+        }
+
+            .delete-btn:hover {
+                background-color: #ef4444;
+                color: white;
+            }
     </style>
 </head>
 <body>
@@ -286,11 +326,11 @@
 
                 const data = await res.json();
                 if (isLoginMode) {
-                    localStorage.setItem("jwtToken", data.token); 
+                    localStorage.setItem("jwtToken", data.token);
                     checkAuthStatus();
                 } else {
                     alert("Реєстрація успішна! Тепер ви можете увійти.");
-                    toggleAuthBtn.click(); 
+                    toggleAuthBtn.click();
                 }
             } catch (err) {
                 console.error("Помилка авторизації", err);
@@ -332,7 +372,7 @@
             if (!currentTaskId) return;
             await fetch(`https://localhost:5005/api/image/cancel/${currentTaskId}`, {
                 method: 'POST',
-                headers: getAuthHeaders() 
+                headers: getAuthHeaders()
             });
             document.getElementById("cancel-btn").style.display = "none";
         };
@@ -363,7 +403,7 @@
             try {
                 const response = await fetch("https://localhost:5005/api/image", {
                     method: "POST",
-                    headers: getAuthHeaders(), 
+                    headers: getAuthHeaders(),
                     body: formData
                 });
 
@@ -399,6 +439,7 @@
                         document.getElementById("progress-bar").innerText = "Скасовано";
                         document.getElementById("progress-bar").style.backgroundColor = "#ef4444";
                         document.getElementById("cancel-btn").style.display = "none";
+                        loadHistory();
                         return;
                     }
 
@@ -419,7 +460,7 @@
         async function loadHistory() {
             try {
                 const res = await fetch("https://localhost:5005/api/image/history", {
-                    headers: getAuthHeaders() 
+                    headers: getAuthHeaders()
                 });
 
                 if (res.status === 401) {
@@ -439,20 +480,52 @@
                 }
 
                 historyData.forEach(item => {
-                    const date = new Date(item.completedAt).toLocaleString("uk-UA");
+                    const date = new Date(item.createdAt).toLocaleString("uk-UA");
                     const url = "https://localhost:5005" + item.resultImageUrl;
+
+                    let imageHtml = '';
+                    let linkTag = '';
+
+                    if (item.status === 'Cancelled') {
+                        imageHtml = `<div class="history-cancelled-thumb">Скасовано</div>`;
+                        linkTag = `<div class="history-content">`;
+                    } else {
+                        imageHtml = `<img src="${url}" class="history-thumb" alt="Мініатюра" onerror="this.closest('.history-card').style.display='none'">`;
+                        linkTag = `<a href="${url}" target="_blank" class="history-content">`;
+                    }
+
                     const card = `
-                            <a href="${url}" target="_blank" class="history-card">
-                                <img src="${url}" class="history-thumb" alt="Мініатюра" onerror="this.closest('.history-card').style.display='none'">
-                                <div class="history-info">
-                                    <span class="history-filename">${item.originalFileName}</span>
-                                    <span class="history-date">${date}</span>
-                                </div>
-                            </a>
+                            <div class="history-card" id="task-${item.id}">
+                                ${linkTag}
+                                    ${imageHtml}
+                                    <div class="history-info">
+                                        <span class="history-filename">${item.originalFileName}</span>
+                                        <span class="history-date">${date}</span>
+                                    </div>
+                                ${item.status === 'Cancelled' ? '</div>' : '</a>'}
+                                <button class="delete-btn" onclick="deleteTask('${item.id}')">✖</button>
+                            </div>
                         `;
                     container.insertAdjacentHTML('beforeend', card);
                 });
             } catch (err) { console.error("Помилка завантаження історії:", err); }
+        }
+
+        async function deleteTask(taskId) {
+            if (!confirm("Ви впевнені, що хочете видалити це фото з історії?")) return;
+
+            try {
+                const res = await fetch(`https://localhost:5005/api/image/history/${taskId}`, {
+                    method: 'DELETE',
+                    headers: getAuthHeaders()
+                });
+
+                if (res.ok) {
+                    loadHistory();
+                } else {
+                    alert("Не вдалося видалити задачу.");
+                }
+            } catch (err) { console.error("Помилка видалення:", err); }
         }
 
         window.addEventListener("DOMContentLoaded", checkAuthStatus);

@@ -13,27 +13,17 @@
         }
 
         .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
             background: #fff;
             padding: 20px;
             border-radius: 10px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
             margin-bottom: 20px;
+            text-align: center;
         }
 
         h1 {
             margin: 0;
             font-size: 1.5rem;
-        }
-
-        .server-badge {
-            color: white;
-            padding: 10px 15px;
-            border-radius: 20px;
-            font-weight: bold;
-            transition: background-color 0.3s;
         }
 
         table {
@@ -80,18 +70,38 @@
             color: #888;
             font-family: monospace;
         }
+
+        .port-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            color: white;
+            font-size: 0.85em;
+        }
+
+        .port-5001 {
+            background-color: #17a2b8;
+        }
+
+        .port-5002 {
+            background-color: #6f42c1;
+        }
+
+        .port-none {
+            background-color: #6c757d;
+        }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>Моніторинг навантаження</h1>
-        <div class="server-badge" id="serverInfo" style="background: #6c757d;">Очікування даних...</div>
+        <h1>Моніторинг навантаження серверів</h1>
     </div>
 
     <table>
         <thead>
             <tr>
                 <th>Час</th>
+                <th>Порт сервера</th>
                 <th>ID Задачі</th>
                 <th>Файл</th>
                 <th>Статус</th>
@@ -109,11 +119,6 @@
                 if (!response.ok) return;
 
                 const data = await response.json();
-
-                const badge = document.getElementById('serverInfo');
-                badge.innerText = 'Запит обробив порт: ' + data.serverPort;
-                badge.style.backgroundColor = data.serverPort === 5001 ? '#17a2b8' : '#6f42c1';
-
                 const tbody = document.getElementById('tasksTableBody');
                 tbody.innerHTML = '';
 
@@ -126,14 +131,20 @@
 
                     let progressText = task.progress >= 0 ? task.progress + '%' : '-';
 
+                    let portClass = 'port-none';
+                    if (task.serverPort === 5001) portClass = 'port-5001';
+                    if (task.serverPort === 5002) portClass = 'port-5002';
+                    let portDisplay = task.serverPort ? task.serverPort : 'Невідомо';
+
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
-                        <td>${task.createdAt}</td>
-                        <td class="task-id">${task.id}</td>
-                        <td>${task.fileName}</td>
-                        <td class="${statusClass}">${statusText}</td>
-                        <td>${progressText}</td>
-                    `;
+                            <td>${task.createdAt}</td>
+                            <td><span class="port-badge ${portClass}">${portDisplay}</span></td>
+                            <td class="task-id">${task.id}</td>
+                            <td>${task.fileName}</td>
+                            <td class="${statusClass}">${statusText}</td>
+                            <td>${progressText}</td>
+                        `;
                     tbody.appendChild(tr);
                 });
             } catch (error) {
